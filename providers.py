@@ -113,18 +113,38 @@ def transcribe(audio_path, language="ar"):
 
 
 def _multipart_post(url, key, model, language, audio_bytes):
-    boundary = "----minbar" + str(abs(hash(url)) % 10**8)
-    parts = []
-    def field(name, value):
-        parts.append(f"--{boundary}\r\nContent-Disposition: form-data; name=\"{name}\"\r\n\r\n{value}\r\n".encode())
-    field("model", model); field("language", language)
-    field("response_format", "verbose_json"); field("timestamp_granularities[]", "word")
-    parts.append((f"--{boundary}\r\nContent-Disposition: form-data; name=\"file\"; filename=\"audio.wav\"\r\n"
-                  f"Content-Type: audio/wav\r\n\r\n").encode())
-    parts.append(audio_bytes); parts.append(f"\r\n--{boundary}--\r\n".encode())
-    body = b"".join(parts)
+    if not audio_bytes:
+        raise RuntimeError("الملف الصوتي فارغ — تأكّد من نجاح استخراج الصوت.")
+    import uuid
+    boundary = "----minbar" + uuid.uuid4().hex
+    CRLF = b"\r\n"
+    pre = b"--" + boundary.encode()
+    out = []
+
+    def text_field(name, value):
+        out.append(pre + CRLF)
+        out.append(f'Content-Disposition: form-data; name="{name}"'.encode() + CRLF + CRLF)
+        out.append(str(value).encode() + CRLF)
+
+    text_field("model", model)
+    if language:
+        text_field("language", language)
+    text_field("response_format", "verbose_json")
+    text_field("timestamp_granularities[]", "word")
+
+    # حقل الملف
+    out.append(pre + CRLF)
+    out.append(b'Content-Disposition: form-data; name="file"; filename="audio.wav"' + CRLF)
+    out.append(b"Content-Type: audio/wav" + CRLF + CRLF)
+    out.append(audio_bytes)
+    out.append(CRLF)
+    out.append(pre + b"--" + CRLF)
+
+    body = b"".join(out)
     req = urllib.request.Request(url, data=body, method="POST", headers={
-        "Content-Type": f"multipart/form-data; boundary={boundary}", "Authorization": f"Bearer {key}"})
+        "Content-Type": f"multipart/form-data; boundary={boundary}",
+        "Content-Length": str(len(body)),
+        "Authorization": f"Bearer {key}"})
     with urllib.request.urlopen(req, timeout=300) as r:
         return json.loads(r.read())
 
