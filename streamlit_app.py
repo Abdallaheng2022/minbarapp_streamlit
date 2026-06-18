@@ -45,10 +45,42 @@ def fmt(s):
 
 def apply_direction():
     rtl = st.session_state.ui_lang == "ar"
-    st.markdown(
-        f"<style>.stApp{{direction:{'rtl' if rtl else 'ltr'};"
-        f"text-align:{'right' if rtl else 'left'}}}</style>",
-        unsafe_allow_html=True)
+    st.markdown(f"""<style>
+    @import url('https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800&display=swap');
+    .stApp {{
+        direction: {'rtl' if rtl else 'ltr'};
+        text-align: {'right' if rtl else 'left'};
+        font-family: 'Tajawal', sans-serif;
+        background: linear-gradient(160deg, #0f1729 0%, #1a2740 100%);
+    }}
+    h1, h2, h3, .stMarkdown, p, label, .stTabs {{ font-family: 'Tajawal', sans-serif; }}
+    .stButton > button {{
+        background: linear-gradient(135deg, #c9a14a 0%, #e0bf6a 100%);
+        color: #0f1729; font-weight: 700; border: none;
+        border-radius: 12px; padding: 0.6rem 1.4rem;
+        transition: all .25s ease; box-shadow: 0 4px 14px rgba(201,161,74,.3);
+    }}
+    .stButton > button:hover {{
+        transform: translateY(-2px); box-shadow: 0 8px 22px rgba(201,161,74,.45);
+    }}
+    .stTextInput > div > div > input, .stNumberInput input {{
+        background: rgba(255,255,255,.06); color: #f5f5f5;
+        border: 1px solid rgba(201,161,74,.3); border-radius: 10px;
+    }}
+    section[data-testid="stSidebar"] {{
+        background: rgba(15,23,41,.96);
+        border-{'left' if rtl else 'right'}: 1px solid rgba(201,161,74,.2);
+    }}
+    .feat {{ display:flex; gap:.6rem; align-items:center; justify-content:center;
+        padding:.7rem 0; color:#cbd5e1; font-size:1.05rem; }}
+    .feat .ic {{ font-size:1.5rem; }}
+    .badge {{ display:inline-block; padding:.25rem .9rem; border-radius:20px;
+        font-weight:700; font-size:.85rem; }}
+    .badge-premium {{ background:linear-gradient(135deg,#c9a14a,#e0bf6a); color:#0f1729; }}
+    .badge-admin {{ background:linear-gradient(135deg,#7c3aed,#a78bfa); color:#fff; }}
+    .badge-free {{ background:rgba(255,255,255,.1); color:#cbd5e1; }}
+    [data-testid="stMetricValue"] {{ color:#e0bf6a; font-weight:800; }}
+    </style>""", unsafe_allow_html=True)
 
 
 def _on_lang_change(key):
@@ -130,34 +162,53 @@ def _download_url(url, tmp, premium):
 
 
 def auth_screen():
-    top = st.columns([3, 1])
-    top[0].title("مِنبَر · Minbar")
-    top[0].caption(L("tagline"))
-    language_selector(top[1], key="_uilang_auth")
+    if "ui_lang" not in st.session_state:
+        st.session_state.ui_lang = "ar"
     apply_direction()
+    top = st.columns([3, 1])
+    language_selector(top[1], key="_uilang_auth")
 
-    tab1, tab2 = st.tabs([L("tab_login"), L("tab_signup")])
-    with tab1:
-        e = st.text_input(L("email"), key="li_e")
-        p = st.text_input(L("password"), type="password", key="li_p")
-        if st.button(L("signin"), key="li_b"):
-            try:
-                r = supa.sign_in(e, p)
-                st.session_state.user = {"id": r.user.id, "email": r.user.email}
-                prof = supa.get_profile(r.user.id) or {}
-                if prof.get("ui_language"):
-                    st.session_state.ui_lang = prof["ui_language"]
-                st.rerun()
-            except Exception as ex:
-                st.error(str(ex))
-    with tab2:
-        e2 = st.text_input(L("email"), key="su_e")
-        p2 = st.text_input(L("password6"), type="password", key="su_p")
-        if st.button(L("signup"), key="su_b"):
-            try:
-                supa.sign_up(e2, p2); st.success(L("signup_done"))
-            except Exception as ex:
-                st.error(str(ex))
+    st.markdown("""
+    <div style="text-align:center; padding:2.5rem 0 1rem;">
+        <div style="font-size:4rem;">🎙️</div>
+        <h1 style="font-size:3rem; margin:.3rem 0;
+            background:linear-gradient(135deg,#c9a14a,#e0bf6a);
+            -webkit-background-clip:text; -webkit-text-fill-color:transparent;">مِنبَر</h1>
+        <p style="font-size:1.4rem; color:#e2e8f0; font-weight:500;">
+            حوّل محاضراتك إلى محتوى احترافي… بالكلمة لا بالمونتاج</p>
+        <p style="font-size:1.05rem; color:#94a3b8; max-width:560px; margin:.5rem auto;">
+            فرّغ، صحّح، واقصص فيديوهاتك بمجرد وصف ما تريد — يفهمك الذكاء الاصطناعي وينفّذ.</p>
+    </div>""", unsafe_allow_html=True)
+
+    fc = st.columns(3)
+    for col, (ic, txt) in zip(fc, [("⚡", "تفريغ فوري دقيق"), ("✂️", "قصّ ذكي بالوصف"), ("🌍", "٨ لغات بالكامل")]):
+        col.markdown(f"<div class='feat'><span class='ic'>{ic}</span>{txt}</div>", unsafe_allow_html=True)
+
+    st.markdown("<br>", unsafe_allow_html=True)
+    _, mid, _ = st.columns([1, 2, 1])
+    with mid:
+        tab1, tab2 = st.tabs(["🔑 " + L("tab_login"), "✨ " + L("tab_signup")])
+        with tab1:
+            e = st.text_input(L("email"), key="li_e")
+            p = st.text_input(L("password"), type="password", key="li_p")
+            if st.button(L("signin"), key="li_b", use_container_width=True):
+                try:
+                    r = supa.sign_in(e, p)
+                    st.session_state.user = {"id": r.user.id, "email": r.user.email}
+                    prof = supa.get_profile(r.user.id) or {}
+                    if prof.get("ui_language"):
+                        st.session_state.ui_lang = prof["ui_language"]
+                    st.rerun()
+                except Exception as ex:
+                    st.error(str(ex))
+        with tab2:
+            e2 = st.text_input(L("email"), key="su_e")
+            p2 = st.text_input(L("password6"), type="password", key="su_p")
+            if st.button(L("signup"), key="su_b", use_container_width=True):
+                try:
+                    supa.sign_up(e2, p2); st.success(L("signup_done"))
+                except Exception as ex:
+                    st.error(str(ex))
 
 
 def sidebar(profile, premium):
@@ -183,26 +234,34 @@ def sidebar(profile, premium):
             keep = st.session_state.ui_lang
             st.session_state.clear(); st.session_state.ui_lang = keep; st.rerun()
         if profile.get("role") == "admin":
-            st.divider(); st.subheader(L("users"))
-            for u in supa.list_users():
-                c = st.columns([3, 1])
-                c[0].write(u.get("email") or u["id"][:8])
-                if u.get("role") != "admin" and c[1].button(L("activate"), key="a"+u["id"]):
-                    supa.set_premium(u["id"], 365); st.rerun()
-            # توليد رموز التفعيل
+            st.divider()
+            st.markdown("<div class='badge badge-admin'>👑 لوحة التحكّم</div>", unsafe_allow_html=True)
+            users = supa.list_users()
+            mc = st.columns(2)
+            mc[0].metric("👥 المستخدمون", len(users))
+            mc[1].metric("⭐ المشتركون", sum(1 for u in users if supa.is_premium(u)))
+
+            with st.expander("👥 إدارة المستخدمين"):
+                for u in users:
+                    c = st.columns([3, 1])
+                    bd = "admin" if u.get("role") == "admin" else ("premium" if supa.is_premium(u) else "free")
+                    c[0].markdown(f"<span class='badge badge-{bd}'>●</span> {u.get('email') or u['id'][:8]}", unsafe_allow_html=True)
+                    if u.get("role") != "admin" and c[1].button(L("activate"), key="a"+u["id"]):
+                        supa.set_premium(u["id"], 365); st.rerun()
+
             with st.expander("🎟️ " + L("codes_title")):
                 cc = st.columns(2)
                 n = cc[0].number_input(L("codes_count"), 1, 100, 1)
                 days = cc[1].number_input(L("codes_days"), 1, 3650, 365)
                 if st.button(L("codes_gen")):
                     new = payments.generate_codes(int(n), int(days))
-                    st.success(" / ".join(new))
+                    st.success(" · ".join(new))
                 rows = payments.list_codes(50)
                 if rows:
                     st.caption(L("codes_list"))
                     for r in rows[:20]:
-                        used = "✅" if r.get("used_by") else "⬜"
-                        st.text(f"{used} {r['code']} · {r['days']}d")
+                        used = "✅" if r.get("used_by") else "🟡"
+                        st.markdown(f"{used} `{r['code']}` · {r['days']}d")
 
 
 def editor(profile, premium):
