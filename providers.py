@@ -59,7 +59,7 @@ def chat(messages, json_mode=False, temperature=0.3, max_tokens=1400):
             body = {"model": model, "messages": messages, "temperature": temperature, "max_tokens": max_tokens}
             if json_mode:
                 body["response_format"] = {"type": "json_object"}
-            req = urllib.request.Request(url, data=json.dumps(body).encode("utf-8"),
+            req = urllib.request.Request(url, data=json.dumps(body).encode("utf-8"), method="POST",
                                          headers={"Content-Type": "application/json", "Authorization": f"Bearer {key}"})
             with urllib.request.urlopen(req, timeout=120) as r:
                 data = json.loads(r.read())
@@ -73,7 +73,7 @@ def chat(messages, json_mode=False, temperature=0.3, max_tokens=1400):
                 # أعد بدون json_mode
                 try:
                     body = {"model": model, "messages": messages, "temperature": temperature, "max_tokens": max_tokens}
-                    req = urllib.request.Request(url, data=json.dumps(body).encode("utf-8"),
+                    req = urllib.request.Request(url, data=json.dumps(body).encode("utf-8"), method="POST",
                                                  headers={"Content-Type": "application/json", "Authorization": f"Bearer {key}"})
                     with urllib.request.urlopen(req, timeout=120) as r:
                         data = json.loads(r.read())
@@ -123,7 +123,7 @@ def _multipart_post(url, key, model, language, audio_bytes):
                   f"Content-Type: audio/wav\r\n\r\n").encode())
     parts.append(audio_bytes); parts.append(f"\r\n--{boundary}--\r\n".encode())
     body = b"".join(parts)
-    req = urllib.request.Request(url, data=body, headers={
+    req = urllib.request.Request(url, data=body, method="POST", headers={
         "Content-Type": f"multipart/form-data; boundary={boundary}", "Authorization": f"Bearer {key}"})
     with urllib.request.urlopen(req, timeout=300) as r:
         return json.loads(r.read())
