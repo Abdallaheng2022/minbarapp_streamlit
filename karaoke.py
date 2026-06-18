@@ -13,7 +13,7 @@ import streamlit.components.v1 as components
 MAX_MB = 60  # حد حجم الفيديو للتضمين المباشر
 
 
-def render(video_path, words, height=520):
+def render(video_path, words, height=440):
     """يعرض مشغّلًا متزامنًا. يرجّع True لو نجح، False لو تخطّى (فيديو كبير)."""
     try:
         size_mb = os.path.getsize(video_path) / (1024 * 1024)
@@ -34,7 +34,7 @@ def render(video_path, words, height=520):
 
     html = """
 <div id="mb-wrap" style="font-family:'Tajawal',sans-serif;direction:rtl">
-  <video id="mb-vid" controls style="width:100%;border-radius:14px;background:#000"></video>
+  <video id="mb-vid" controls style="width:100%;max-width:420px;display:block;margin:0 auto;border-radius:14px;background:#000"></video>
   <div style="display:flex;justify-content:space-between;align-items:center;margin:.6rem 0 .3rem">
     <span style="font-weight:700;color:#0f172a">📝 النص المتزامن — اضغط أي كلمة للقفز إليها</span>
     <label style="font-size:.85rem;color:#475569;cursor:pointer">

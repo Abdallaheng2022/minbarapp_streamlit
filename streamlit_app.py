@@ -341,7 +341,7 @@ def editor(profile, premium):
     c1, c2 = st.columns(2)
     with c1:
         # مشغّل متزامن: النص يتحرّك مع الفيديو + الضغط يقفز للحظة
-        ok = karaoke.render(st.session_state.vpath, st.session_state.words, height=520)
+        ok = karaoke.render(st.session_state.vpath, st.session_state.words, height=460)
         if not ok:
             st.video(st.session_state.vpath)
             st.caption("ℹ️ الفيديو كبير على المشغّل المتزامن — يُعرض عاديًا. النص المتزامن يعمل مع الفيديوهات حتى ٦٠م.ب.")
@@ -407,6 +407,8 @@ def editor(profile, premium):
                 st.session_state["_smart_reason"] = res.get("reason", "")
                 st.session_state["_smart_prov"] = res.get("provider", "")
                 st.session_state["_smart_times"] = res.get("time_ranges", [])
+                st.session_state["_smart_mode"] = res.get("mode", "cut")
+                st.session_state["_smart_nseg"] = res.get("segments_found", 0)
             except Exception as ex:
                 st.error(str(ex))
     if st.session_state.get("_smart_removed"):
@@ -415,6 +417,12 @@ def editor(profile, premium):
         st.caption(L("smartcut_preview").format(n=len(rem), prov=st.session_state.get("_smart_prov", "")))
         if st.session_state.get("_smart_reason"):
             st.caption("💡 " + st.session_state["_smart_reason"])
+        _mode = st.session_state.get("_smart_mode", "cut")
+        _nseg = st.session_state.get("_smart_nseg", 0)
+        if _mode == "extract" and _nseg:
+            st.info(f"🎯 وضع الاستخراج: عُثر على {_nseg} مقطعًا مطابقًا — سيُبقى المطابق ويُحذف الباقي.")
+        elif _nseg > 1:
+            st.info(f"✂️ عُثر على {_nseg} مواضع مطابقة للحذف.")
         # عرض النطاقات الزمنية الدقيقة التي ستُقصّ
         tr = st.session_state.get("_smart_times") or []
         if tr:

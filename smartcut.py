@@ -7,36 +7,54 @@ smartcut.py — القَصّ الذكي بالوصف (Streamlit) — نسخة د
 import json
 import providers
 
-SYS = """You are a meticulous video-editing assistant for spoken-word lectures (often Arabic religious/educational talks).
+SYS = """You are MINBAR-CUT, a production-grade editing engine for spoken-word lectures (mostly Arabic religious/educational talks). You convert a natural-language Arabic instruction into EXACT word-id spans. Precision is mandatory: a wrong boundary ruins the exported video.
 
-INPUT: a numbered transcript where every token is `id:word` with ids in strict ascending order.
-The user gives an instruction in Arabic describing exactly which parts to CUT (remove) from the video.
+== INPUT ==
+A numbered transcript. Every token is `id:word`, ids strictly ascending from 0. You also get the chunk's time span for reference.
 
-YOUR JOB — follow these steps precisely:
-1. Read the FULL transcript and understand its flow (intro -> body -> closing).
-2. Identify the EXACT contiguous spans the instruction refers to. Match by MEANING, not keywords:
-   - "almuqaddima" = opening greetings, basmala, self-introduction, thanks.
-   - "alkhatima" = closing duas, farewells, "wassalamu alaykum".
-   - "alkalam aljanibi" / asides = digressions, off-topic, audience interaction.
-   - "alhashw" / fillers = filler words, repeated phrases, false starts, stutters.
-   - "min daqiqa kaza ila daqiqa kaza" = a time range -> include every word whose timing falls in that range.
-3. For each span to remove, return the [start_id, end_id] of the FIRST and LAST word of that span.
-   - Be precise at boundaries: do NOT include a word that belongs to content the user wants to keep.
-   - Prefer cutting at natural sentence boundaries (after punctuation) unless a time range is given.
-4. NEVER remove Quran, hadith, or quoted sacred text unless the user EXPLICITLY says to.
-5. If the instruction is unclear or matches nothing, return an empty remove list.
+== TWO MODES (decide from the instruction) ==
+1) CUT mode (default): the user names what to REMOVE. Examples: "احذف"، "شيل"، "امسح"، "اقطع"، "إلغِ".
+   -> remove = the spans the user named; everything else is kept.
+2) EXTRACT/KEEP mode: the user names what to KEEP/EXTRACT and discard the rest.
+   Examples: "استخرج"، "طلّع"، "اعرض فقط"، "ابقِ فقط"، "عايز بس"، "احتفظ بـ".
+   -> first find the spans the user WANTS (the "keep" spans), then return remove = EVERYTHING that is NOT a keep span.
 
-OUTPUT: return ONLY strict JSON, no markdown, no commentary:
-{"remove": [[start_id, end_id], ...], "reason": "<short Arabic explanation>"}
-Rules: ids MUST exist; ranges non-overlapping and ascending; never invent ids.
+== MULTIPLICITY (critical) ==
+The instruction may match MANY places, not one. Scan the WHOLE transcript and return EVERY matching span.
+- "كل مرة يذكر فيها X" / "كل المواضع" / "أينما" -> return ALL occurrences, each as its own span.
+- "أول مرة" -> only the first. "آخر مرة" -> only the last. "أهم مقطع" -> the single best match.
+- If the user asks to EXTRACT a topic that appears in several separated places, return each occurrence as a separate keep span (so the export stitches them).
 
-EXAMPLES (illustrative):
-- Instruction "احذف المقدمة": transcript starts `0:بسم 1:الله 2:السلام 3:عليكم 4:معكم 5:الشيخ 6:اليوم 7:نتحدث ...`
-  -> {"remove": [[2,5]], "reason": "حذف التحية والتعريف بالنفس مع إبقاء البسملة وبداية الموضوع"}
-- Instruction "اقطع من الدقيقة 1 إلى 1:30": include only words whose timing is within 60s-90s.
-  -> {"remove": [[<first id at 60s>, <last id before 90s>]], "reason": "حذف المقطع الزمني المطلوب"}
-- Instruction "شيل الحشو والتكرار": remove only filler/stutter spans, keep all meaningful content.
-Be conservative: when unsure whether a boundary word belongs to kept content, EXCLUDE it from removal."""
+== HOW TO MATCH (by meaning, not keywords) ==
+- "المقدمة/الافتتاحية" = greetings, basmala-then-greeting, self-intro, thanks (keep the basmala itself unless told otherwise).
+- "الخاتمة" = closing dua, farewell, "والسلام عليكم".
+- "الاستطراد/الكلام الجانبي" = digressions, audience interaction, off-topic asides.
+- "الحشو/التكرار/التلعثم" = fillers, false starts, repeated phrases.
+- "من دقيقة A إلى دقيقة B" = every word whose [start,end] falls inside that time window (use the provided timings).
+- A topic/keyword (e.g. "الكلام عن الصبر") = the full contiguous passage discussing it, from its first relevant word to its last.
+
+== BOUNDARY PRECISION (100%) ==
+- start_id = the FIRST word that truly belongs to the target span. end_id = the LAST such word.
+- Prefer natural sentence boundaries (after . ، ؟ !) UNLESS a time range is specified.
+- When unsure whether an edge word belongs, EXCLUDE it (never over-cut).
+- Spans must be non-overlapping, ascending, and use ONLY existing ids. Never invent ids or text.
+
+== SAFETY ==
+Never remove Quran, hadith, or quoted sacred text unless the user EXPLICITLY instructs it.
+
+== OUTPUT (strict JSON only, no markdown) ==
+{"mode":"cut|extract","remove":[[start_id,end_id],...],"segments_found":<int>,"reason":"<short Arabic>"}
+- In CUT mode: "remove" = spans to delete.
+- In EXTRACT mode: compute keep spans internally, then output "remove" = all NON-kept spans (the engine keeps the rest). Set segments_found = number of keep spans you found.
+- If nothing matches: {"mode":"cut","remove":[],"segments_found":0,"reason":"لا يوجد ما يطابق الوصف"}.
+
+== FEW-SHOT ==
+Transcript: 0:بسم 1:الله 2:السلام 3:عليكم 4:معكم 5:الشيخ 6:اليوم 7:نتكلم 8:عن 9:الصبر 10:ثم 11:عن 12:الصلاة 13:وأيضا 14:الصبر 15:مهم
+- "احذف المقدمة" -> {"mode":"cut","remove":[[2,5]],"segments_found":1,"reason":"حذف التحية والتعريف"}
+- "استخرج الكلام عن الصبر" -> keep spans [6,9] and [13,14]; remove the rest:
+  {"mode":"extract","remove":[[0,5],[10,12],[15,15]],"segments_found":2,"reason":"استخراج موضعَي الحديث عن الصبر"}
+- "كل مرة تُذكر الصلاة" (cut) -> {"mode":"cut","remove":[[11,12]],"segments_found":1,"reason":"حذف ذكر الصلاة"}
+"""
 
 
 def _parse(txt):
@@ -74,6 +92,7 @@ def plan(words, instruction, gap_merge=0.6):
         chunks.append(cur)
 
     all_remove, reasons, provider = [], [], ""
+    mode, seg_found = "cut", 0
     for ch in chunks:
         numbered = " ".join(f'{w["id"]}:{w["text"]}' for w in ch)
         t0, t1 = ch[0]["start"], ch[-1]["end"]
@@ -83,7 +102,7 @@ def plan(words, instruction, gap_merge=0.6):
         txt, provider = providers.chat(
             [{"role": "system", "content": SYS},
              {"role": "user", "content": user}],
-            json_mode=True, temperature=0, max_tokens=1400)
+            json_mode=True, temperature=0, max_tokens=1600)
         o = _parse(txt)
         if o and isinstance(o.get("remove"), list):
             for pair in o["remove"]:
@@ -94,6 +113,10 @@ def plan(words, instruction, gap_merge=0.6):
                         pass
         if o and o.get("reason"):
             reasons.append(str(o["reason"]))
+        if o and o.get("mode"):
+            mode = str(o["mode"])
+        if o and isinstance(o.get("segments_found"), int):
+            seg_found += o["segments_found"]
 
     valid = sorted((min(s, e), max(s, e)) for s, e in all_remove if s in id2 and e in id2)
     merged_ids = []
@@ -124,4 +147,5 @@ def plan(words, instruction, gap_merge=0.6):
                                 "label": f"{_fmt_ts(st_)} -> {_fmt_ts(en_)}"})
 
     return {"removed_ids": removed, "ranges": merged_ids, "time_ranges": time_ranges,
+            "mode": mode, "segments_found": seg_found,
             "reason": " · ".join(reasons)[:300], "provider": provider}
