@@ -17,6 +17,7 @@ import correct_groq
 import providers
 import smartcut
 import payments
+import karaoke
 from i18n import TR, LANG_NAMES, t
 
 st.set_page_config(page_title="مِنبَر · Minbar", page_icon="🎙️", layout="wide")
@@ -339,7 +340,11 @@ def editor(profile, premium):
 
     c1, c2 = st.columns(2)
     with c1:
-        st.video(st.session_state.vpath)
+        # مشغّل متزامن: النص يتحرّك مع الفيديو + الضغط يقفز للحظة
+        ok = karaoke.render(st.session_state.vpath, st.session_state.words, height=520)
+        if not ok:
+            st.video(st.session_state.vpath)
+            st.caption("ℹ️ الفيديو كبير على المشغّل المتزامن — يُعرض عاديًا. النص المتزامن يعمل مع الفيديوهات حتى ٦٠م.ب.")
         if providers.llm_chain() and st.button(L("proofread")):
             with st.spinner("…"):
                 try:

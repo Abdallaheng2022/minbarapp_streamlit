@@ -28,7 +28,15 @@ YOUR JOB — follow these steps precisely:
 
 OUTPUT: return ONLY strict JSON, no markdown, no commentary:
 {"remove": [[start_id, end_id], ...], "reason": "<short Arabic explanation>"}
-Rules: ids MUST exist; ranges non-overlapping and ascending; never invent ids."""
+Rules: ids MUST exist; ranges non-overlapping and ascending; never invent ids.
+
+EXAMPLES (illustrative):
+- Instruction "احذف المقدمة": transcript starts `0:بسم 1:الله 2:السلام 3:عليكم 4:معكم 5:الشيخ 6:اليوم 7:نتحدث ...`
+  -> {"remove": [[2,5]], "reason": "حذف التحية والتعريف بالنفس مع إبقاء البسملة وبداية الموضوع"}
+- Instruction "اقطع من الدقيقة 1 إلى 1:30": include only words whose timing is within 60s-90s.
+  -> {"remove": [[<first id at 60s>, <last id before 90s>]], "reason": "حذف المقطع الزمني المطلوب"}
+- Instruction "شيل الحشو والتكرار": remove only filler/stutter spans, keep all meaningful content.
+Be conservative: when unsure whether a boundary word belongs to kept content, EXCLUDE it from removal."""
 
 
 def _parse(txt):
