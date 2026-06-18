@@ -49,7 +49,8 @@ _RETRY = {429, 401, 403, 500, 502, 503, 504}
 
 
 def chat(messages, json_mode=False, temperature=0.3, max_tokens=1400):
-    """ينادي مزوّدي الذكاء بالتناوب. يرجّع (نص، اسم_المزوّد)."""
+    """ينادي مزوّدي الذكاء بالتناوب (عبر requests). يرجّع (نص، اسم_المزوّد)."""
+    import requests
     chain = llm_chain()
     if not chain:
         raise RuntimeError("لا يوجد مفتاح ذكاء في secrets (مثل CEREBRAS_API_KEY).")
@@ -59,31 +60,20 @@ def chat(messages, json_mode=False, temperature=0.3, max_tokens=1400):
             body = {"model": model, "messages": messages, "temperature": temperature, "max_tokens": max_tokens}
             if json_mode:
                 body["response_format"] = {"type": "json_object"}
-            req = urllib.request.Request(url, data=json.dumps(body).encode("utf-8"), method="POST",
-                                         headers={"Content-Type": "application/json", "Authorization": f"Bearer {key}"})
-            with urllib.request.urlopen(req, timeout=120) as r:
-                data = json.loads(r.read())
-                txt = (data["choices"][0]["message"]["content"] or "").strip()
-                if txt:
-                    return txt, name
-                last = f"{name}: empty"
-        except urllib.error.HTTPError as e:
-            last = f"{name}: {e.code}"
-            if json_mode and e.code in (400, 422):
-                # أعد بدون json_mode
-                try:
-                    body = {"model": model, "messages": messages, "temperature": temperature, "max_tokens": max_tokens}
-                    req = urllib.request.Request(url, data=json.dumps(body).encode("utf-8"), method="POST",
-                                                 headers={"Content-Type": "application/json", "Authorization": f"Bearer {key}"})
-                    with urllib.request.urlopen(req, timeout=120) as r:
-                        data = json.loads(r.read())
-                        txt = (data["choices"][0]["message"]["content"] or "").strip()
-                        if txt:
-                            return txt, name
-                except Exception as e2:
-                    last = f"{name}: {e2}"
-            if e.code not in _RETRY:
+            headers = {"Content-Type": "application/json", "Authorization": f"Bearer {key}"}
+            r = requests.post(url, headers=headers, json=body, timeout=120)
+            # بعض المزوّدين لا يدعمون json_object — أعد بدونه
+            if r.status_code in (400, 422) and json_mode:
+                body.pop("response_format", None)
+                r = requests.post(url, headers=headers, json=body, timeout=120)
+            if r.status_code >= 400:
+                last = f"{name}: {r.status_code}"
                 continue
+            data = r.json()
+            txt = (data["choices"][0]["message"]["content"] or "").strip()
+            if txt:
+                return txt, name
+            last = f"{name}: empty"
         except Exception as e:
             last = f"{name}: {e}"
     raise RuntimeError("فشل الذكاء من كل المزوّدين — " + last)
@@ -115,38 +105,22 @@ def transcribe(audio_path, language="ar"):
 def _multipart_post(url, key, model, language, audio_bytes):
     if not audio_bytes:
         raise RuntimeError("الملف الصوتي فارغ — تأكّد من نجاح استخراج الصوت.")
-    import uuid
-    boundary = "----minbar" + uuid.uuid4().hex
-    CRLF = b"\r\n"
-    pre = b"--" + boundary.encode()
-    out = []
-
-    def text_field(name, value):
-        out.append(pre + CRLF)
-        out.append(f'Content-Disposition: form-data; name="{name}"'.encode() + CRLF + CRLF)
-        out.append(str(value).encode() + CRLF)
-
-    text_field("model", model)
+    import requests
+    # نفس طريقة cURL تمامًا: الملف في files، والباقي في data
+    files = {"file": ("audio.wav", audio_bytes, "audio/wav")}
+    data = {
+        "model": model,
+        "response_format": "verbose_json",
+        "timestamp_granularities[]": "word",
+    }
     if language:
-        text_field("language", language)
-    text_field("response_format", "verbose_json")
-    text_field("timestamp_granularities[]", "word")
-
-    # حقل الملف
-    out.append(pre + CRLF)
-    out.append(b'Content-Disposition: form-data; name="file"; filename="audio.wav"' + CRLF)
-    out.append(b"Content-Type: audio/wav" + CRLF + CRLF)
-    out.append(audio_bytes)
-    out.append(CRLF)
-    out.append(pre + b"--" + CRLF)
-
-    body = b"".join(out)
-    req = urllib.request.Request(url, data=body, method="POST", headers={
-        "Content-Type": f"multipart/form-data; boundary={boundary}",
-        "Content-Length": str(len(body)),
-        "Authorization": f"Bearer {key}"})
-    with urllib.request.urlopen(req, timeout=300) as r:
-        return json.loads(r.read())
+        data["language"] = language
+    r = requests.post(url, headers={"Authorization": f"Bearer {key}"},
+                      files=files, data=data, timeout=300)
+    if r.status_code >= 400:
+        # نرفع خطأً متوافقًا مع معالجة urllib في الأعلى
+        raise urllib.error.HTTPError(url, r.status_code, r.text, hdrs=None, fp=None)
+    return r.json()
 
 
 FILLERS = {
