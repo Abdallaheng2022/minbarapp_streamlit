@@ -51,35 +51,55 @@ def apply_direction():
         direction: {'rtl' if rtl else 'ltr'};
         text-align: {'right' if rtl else 'left'};
         font-family: 'Tajawal', sans-serif;
-        background: linear-gradient(160deg, #0f1729 0%, #1a2740 100%);
+        background: #f7f9fc;
+        color: #1e293b;
     }}
-    h1, h2, h3, .stMarkdown, p, label, .stTabs {{ font-family: 'Tajawal', sans-serif; }}
+    h1, h2, h3, h4, .stMarkdown, p, label, .stTabs {{ font-family: 'Tajawal', sans-serif; color:#1e293b; }}
+    #MainMenu, footer, header {{ visibility: hidden; }}
+
+    /* الأزرار — أزرق مخضرّ هادئ (هوية مِنبَر) */
     .stButton > button {{
-        background: linear-gradient(135deg, #c9a14a 0%, #e0bf6a 100%);
-        color: #0f1729; font-weight: 700; border: none;
-        border-radius: 12px; padding: 0.6rem 1.4rem;
-        transition: all .25s ease; box-shadow: 0 4px 14px rgba(201,161,74,.3);
+        background: linear-gradient(135deg, #0d9488 0%, #0f766e 100%);
+        color: #fff; font-weight: 700; border: none;
+        border-radius: 12px; padding: 0.6rem 1.5rem;
+        transition: all .2s ease; box-shadow: 0 2px 8px rgba(13,148,136,.25);
     }}
     .stButton > button:hover {{
-        transform: translateY(-2px); box-shadow: 0 8px 22px rgba(201,161,74,.45);
+        transform: translateY(-1px); box-shadow: 0 6px 18px rgba(13,148,136,.35);
+        background: linear-gradient(135deg, #0f766e 0%, #115e59 100%);
     }}
+
+    /* الحقول */
     .stTextInput > div > div > input, .stNumberInput input {{
-        background: rgba(255,255,255,.06); color: #f5f5f5;
-        border: 1px solid rgba(201,161,74,.3); border-radius: 10px;
+        background:#fff; color:#1e293b; border:1.5px solid #e2e8f0;
+        border-radius:10px; padding:.55rem .8rem;
     }}
-    section[data-testid="stSidebar"] {{
-        background: rgba(15,23,41,.96);
-        border-{'left' if rtl else 'right'}: 1px solid rgba(201,161,74,.2);
-    }}
-    .feat {{ display:flex; gap:.6rem; align-items:center; justify-content:center;
-        padding:.7rem 0; color:#cbd5e1; font-size:1.05rem; }}
-    .feat .ic {{ font-size:1.5rem; }}
-    .badge {{ display:inline-block; padding:.25rem .9rem; border-radius:20px;
-        font-weight:700; font-size:.85rem; }}
-    .badge-premium {{ background:linear-gradient(135deg,#c9a14a,#e0bf6a); color:#0f1729; }}
-    .badge-admin {{ background:linear-gradient(135deg,#7c3aed,#a78bfa); color:#fff; }}
-    .badge-free {{ background:rgba(255,255,255,.1); color:#cbd5e1; }}
-    [data-testid="stMetricValue"] {{ color:#e0bf6a; font-weight:800; }}
+    .stTextInput > div > div > input:focus {{ border-color:#0d9488; box-shadow:0 0 0 3px rgba(13,148,136,.12); }}
+
+    /* التبويبات */
+    .stTabs [data-baseweb="tab-list"] {{ gap:.4rem; }}
+    .stTabs [data-baseweb="tab"] {{ border-radius:10px; padding:.4rem 1rem; }}
+    .stTabs [aria-selected="true"] {{ background:#e6fffa; color:#0f766e; }}
+
+    /* الشريط الجانبي */
+    section[data-testid="stSidebar"] {{ background:#ffffff;
+        border-{'left' if rtl else 'right'}:1px solid #e8edf3; }}
+
+    /* بطاقات الميزات */
+    .feat {{ background:#fff; border:1px solid #e8edf3; border-radius:16px;
+        padding:1.3rem 1rem; text-align:center; transition:.2s; height:100%; }}
+    .feat:hover {{ transform:translateY(-3px); box-shadow:0 12px 28px rgba(15,23,42,.08); border-color:#0d9488; }}
+    .feat .ic {{ font-size:2rem; display:block; margin-bottom:.5rem; }}
+    .feat .t {{ font-weight:700; color:#0f172a; font-size:1.05rem; }}
+    .feat .d {{ color:#64748b; font-size:.85rem; margin-top:.2rem; }}
+
+    /* شارات الحالة */
+    .badge {{ display:inline-block; padding:.25rem .9rem; border-radius:20px; font-weight:700; font-size:.82rem; }}
+    .badge-premium {{ background:#fef3c7; color:#92400e; }}
+    .badge-admin {{ background:#ede9fe; color:#5b21b6; }}
+    .badge-free {{ background:#f1f5f9; color:#475569; }}
+    [data-testid="stMetricValue"] {{ color:#0d9488; font-weight:800; }}
+    .stApp [data-testid="stMetric"] {{ background:#fff; border:1px solid #e8edf3; border-radius:14px; padding:.8rem 1rem; }}
     </style>""", unsafe_allow_html=True)
 
 
@@ -169,20 +189,23 @@ def auth_screen():
     language_selector(top[1], key="_uilang_auth")
 
     st.markdown("""
-    <div style="text-align:center; padding:2.5rem 0 1rem;">
-        <div style="font-size:4rem;">🎙️</div>
-        <h1 style="font-size:3rem; margin:.3rem 0;
-            background:linear-gradient(135deg,#c9a14a,#e0bf6a);
+    <div style="text-align:center; padding:2.2rem 0 1rem;">
+        <div style="font-size:3.6rem;">🎙️</div>
+        <h1 style="font-size:3rem; margin:.3rem 0; font-weight:800;
+            background:linear-gradient(135deg,#0d9488,#14b8a6);
             -webkit-background-clip:text; -webkit-text-fill-color:transparent;">مِنبَر</h1>
-        <p style="font-size:1.4rem; color:#e2e8f0; font-weight:500;">
+        <p style="font-size:1.35rem; color:#0f172a; font-weight:700;">
             حوّل محاضراتك إلى محتوى احترافي… بالكلمة لا بالمونتاج</p>
-        <p style="font-size:1.05rem; color:#94a3b8; max-width:560px; margin:.5rem auto;">
+        <p style="font-size:1.05rem; color:#64748b; max-width:560px; margin:.5rem auto;">
             فرّغ، صحّح، واقصص فيديوهاتك بمجرد وصف ما تريد — يفهمك الذكاء الاصطناعي وينفّذ.</p>
     </div>""", unsafe_allow_html=True)
 
     fc = st.columns(3)
-    for col, (ic, txt) in zip(fc, [("⚡", "تفريغ فوري دقيق"), ("✂️", "قصّ ذكي بالوصف"), ("🌍", "٨ لغات بالكامل")]):
-        col.markdown(f"<div class='feat'><span class='ic'>{ic}</span>{txt}</div>", unsafe_allow_html=True)
+    cards = [("⚡", "تفريغ فوري دقيق", "نص كامل بتوقيت كل كلمة"),
+             ("✂️", "قصّ ذكي بالوصف", "اكتب ما تريد حذفه فيُنفَّذ"),
+             ("🌍", "٨ لغات بالكامل", "واجهة عربية وعالمية")]
+    for col, (ic, t, d) in zip(fc, cards):
+        col.markdown(f"<div class='feat'><span class='ic'>{ic}</span><div class='t'>{t}</div><div class='d'>{d}</div></div>", unsafe_allow_html=True)
 
     st.markdown("<br>", unsafe_allow_html=True)
     _, mid, _ = st.columns([1, 2, 1])
@@ -330,13 +353,36 @@ def editor(profile, premium):
             st.rerun()
     with c2:
         st.subheader(L("edit_title"))
-        df = pd.DataFrame([{L("col_remove"): False, L("col_text"): w["text"],
-                            "start": w["start"], "end": w["end"]} for w in st.session_state.words])
-        edited = st.data_editor(df, use_container_width=True, height=360, hide_index=True,
-                                column_config={"start": st.column_config.NumberColumn(format="%.2f", disabled=True),
-                                               "end": st.column_config.NumberColumn(format="%.2f", disabled=True)})
-        st.session_state.words = [{"id": i, "text": r[L("col_text")], "start": r["start"], "end": r["end"]}
-                                  for i, r in edited.iterrows()]
+        # عرض النص الكامل القابل للقراءة + وضع تحرير نصّي
+        full_text = " ".join(w["text"] for w in st.session_state.words)
+        tab_tbl, tab_txt = st.tabs(["📝 " + L("edit_title"), "📄 النص الكامل"])
+        with tab_txt:
+            st.caption("اقرأ النص كاملًا أو عدّله مباشرة ثم احفظ.")
+            new_txt = st.text_area("النص", value=full_text, height=300,
+                                   label_visibility="collapsed", key="full_txt")
+            if st.button("💾 احفظ تعديل النص"):
+                toks = new_txt.split()
+                old = st.session_state.words
+                # أعِد توزيع التوقيت على الكلمات الجديدة بالتناسب
+                if toks:
+                    t0 = old[0]["start"] if old else 0.0
+                    t1 = old[-1]["end"] if old else len(toks) * 0.4
+                    step = (t1 - t0) / max(1, len(toks))
+                    st.session_state.words = [{"id": i, "text": tk,
+                                               "start": round(t0 + i * step, 3),
+                                               "end": round(t0 + (i + 1) * step, 3),
+                                               "kind": "speech"} for i, tk in enumerate(toks)]
+                    if st.session_state.get("project_id"):
+                        supa.update_transcript(st.session_state.project_id, st.session_state.words)
+                    st.rerun()
+        with tab_tbl:
+            df = pd.DataFrame([{L("col_remove"): False, L("col_text"): w["text"],
+                                "start": w["start"], "end": w["end"]} for w in st.session_state.words])
+            edited = st.data_editor(df, use_container_width=True, height=300, hide_index=True,
+                                    column_config={"start": st.column_config.NumberColumn(format="%.2f", disabled=True),
+                                                   "end": st.column_config.NumberColumn(format="%.2f", disabled=True)})
+            st.session_state.words = [{"id": i, "text": r[L("col_text")], "start": r["start"], "end": r["end"]}
+                                      for i, r in edited.iterrows()]
 
     segs = kept_segments(edited); kept = sum(e - s for s, e in segs)
     m = st.columns(3)
@@ -355,6 +401,7 @@ def editor(profile, premium):
                 st.session_state["_smart_removed"] = list(res["removed_ids"])
                 st.session_state["_smart_reason"] = res.get("reason", "")
                 st.session_state["_smart_prov"] = res.get("provider", "")
+                st.session_state["_smart_times"] = res.get("time_ranges", [])
             except Exception as ex:
                 st.error(str(ex))
     if st.session_state.get("_smart_removed"):
@@ -363,7 +410,16 @@ def editor(profile, premium):
         st.caption(L("smartcut_preview").format(n=len(rem), prov=st.session_state.get("_smart_prov", "")))
         if st.session_state.get("_smart_reason"):
             st.caption("💡 " + st.session_state["_smart_reason"])
-        st.markdown(f"<div style='max-height:160px;overflow:auto;background:#fff7e6;padding:10px;border-radius:8px'>{preview}</div>", unsafe_allow_html=True)
+        # عرض النطاقات الزمنية الدقيقة التي ستُقصّ
+        tr = st.session_state.get("_smart_times") or []
+        if tr:
+            st.markdown("**المقاطع التي ستُحذف (بالتوقيت الدقيق):**")
+            for seg in tr:
+                dur = seg["end"] - seg["start"]
+                st.markdown(f"<div style='background:#fef2f2;border:1px solid #fecaca;border-radius:8px;"
+                            f"padding:6px 12px;margin:3px 0;color:#991b1b'>✂️ {seg['label']} "
+                            f"<span style='color:#64748b'>({dur:.1f}s)</span></div>", unsafe_allow_html=True)
+        st.markdown(f"<div style='max-height:160px;overflow:auto;background:#f0fdfa;padding:12px;border-radius:10px;border:1px solid #ccfbf1;line-height:2'>{preview}</div>", unsafe_allow_html=True)
         ca = st.columns(2)
         if ca[0].button("✓ " + L("smartcut_apply")):
             st.session_state.words = [w for w in st.session_state.words if w["id"] not in rem]
