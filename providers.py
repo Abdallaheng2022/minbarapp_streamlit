@@ -20,24 +20,23 @@ def transcribe_chain():
     """٥ مزوّدي تفريغ. املأ المفاتيح في secrets؛ الفارغ يُتخطّى."""
     acct = _secret("CF_ACCOUNT_ID", "")
     chain = [
-        ("Groq", "https://api.groq.com/openai/v1/audio/transcriptions", "whisper-large-v3-turbo", _secret("GROQ_API_KEY") or _secret("LLM_API_KEY")),
+        ("Groq", "https://api.groq.com/openai/v1/audio/transcriptions", _secret("GROQ_ASR_MODEL", "whisper-large-v3"), _secret("GROQ_API_KEY") or _secret("LLM_API_KEY")),
         ("Cloudflare", f"https://api.cloudflare.com/client/v4/accounts/{acct}/ai/v1/audio/transcriptions", "@cf/openai/whisper-large-v3-turbo", _secret("CF_AI_TOKEN")),
     ]
     return [(n, u, m, k) for (n, u, m, k) in chain if k and "ACCOUNT_ID" not in u and (acct or "cloudflare" not in u.lower())]
 
 
 def llm_chain():
-    """٦ مزوّدي ذكاء."""
+    """مزوّدو الذكاء بالتناوب — مرتّبون بالأقوى في اتباع التعليمات والمخرجات المنظّمة."""
     acct = _secret("CF_ACCOUNT_ID", "")
     chain = [
-        ("Cerebras", "https://api.cerebras.ai/v1/chat/completions", _secret("CEREBRAS_MODEL", "gpt-oss-120b"), _secret("CEREBRAS_API_KEY")),
+        ("Cerebras", "https://api.cerebras.ai/v1/chat/completions", _secret("CEREBRAS_MODEL", "llama-3.3-70b"), _secret("CEREBRAS_API_KEY")),
         ("Groq", "https://api.groq.com/openai/v1/chat/completions", _secret("GROQ_MODEL", "llama-3.3-70b-versatile"), _secret("GROQ_API_KEY") or _secret("LLM_API_KEY")),
-        ("NVIDIA", "https://integrate.api.nvidia.com/v1/chat/completions", "meta/llama-3.3-70b-instruct", _secret("NVIDIA_API_KEY")),
-        ("Mistral", "https://api.mistral.ai/v1/chat/completions", "mistral-small-latest", _secret("MISTRAL_API_KEY")),
-        ("OpenRouter", "https://openrouter.ai/api/v1/chat/completions", "meta-llama/llama-3.3-70b-instruct:free", _secret("OPENROUTER_API_KEY")),
+        ("NVIDIA", "https://integrate.api.nvidia.com/v1/chat/completions", _secret("NVIDIA_MODEL", "qwen/qwen2.5-72b-instruct"), _secret("NVIDIA_API_KEY")),
+        ("Mistral", "https://api.mistral.ai/v1/chat/completions", _secret("MISTRAL_MODEL", "mistral-large-latest"), _secret("MISTRAL_API_KEY")),
+        ("OpenRouter", "https://openrouter.ai/api/v1/chat/completions", _secret("OPENROUTER_MODEL", "meta-llama/llama-3.3-70b-instruct:free"), _secret("OPENROUTER_API_KEY")),
         ("Cloudflare", f"https://api.cloudflare.com/client/v4/accounts/{acct}/ai/v1/chat/completions", "@cf/meta/llama-3.3-70b-instruct-fp8-fast", _secret("CF_AI_TOKEN")),
     ]
-    # دعم الإعداد القديم: LLM_BASE_URL/LLM_MODEL كمزوّد أساسي
     legacy_key = _secret("LLM_API_KEY")
     legacy_url = _secret("LLM_BASE_URL")
     if legacy_key and legacy_url and not _secret("CEREBRAS_API_KEY"):
@@ -45,13 +44,23 @@ def llm_chain():
     return [(n, u, m, k) for (n, u, m, k) in chain if k and "ACCOUNT_ID" not in u]
 
 
+def fast_chain():
+    """نموذج سريع لتحسين النية (منخفض الكمون). يسقط على llm_chain لو لا مفتاح مخصّص."""
+    fast = [
+        ("Cerebras", "https://api.cerebras.ai/v1/chat/completions", _secret("FAST_MODEL", "llama-3.1-8b"), _secret("CEREBRAS_API_KEY")),
+        ("Groq", "https://api.groq.com/openai/v1/chat/completions", "llama-3.1-8b-instant", _secret("GROQ_API_KEY") or _secret("LLM_API_KEY")),
+    ]
+    out = [(n, u, m, k) for (n, u, m, k) in fast if k]
+    return out or llm_chain()
+
+
 _RETRY = {429, 401, 403, 500, 502, 503, 504}
 
 
-def chat(messages, json_mode=False, temperature=0.3, max_tokens=1400):
+def chat(messages, json_mode=False, temperature=0.3, max_tokens=1400, chain=None):
     """ينادي مزوّدي الذكاء بالتناوب (عبر requests). يرجّع (نص، اسم_المزوّد)."""
     import requests
-    chain = llm_chain()
+    chain = chain if chain is not None else llm_chain()
     if not chain:
         raise RuntimeError("لا يوجد مفتاح ذكاء في secrets (مثل CEREBRAS_API_KEY).")
     last = "no provider"
@@ -61,11 +70,10 @@ def chat(messages, json_mode=False, temperature=0.3, max_tokens=1400):
             if json_mode:
                 body["response_format"] = {"type": "json_object"}
             headers = {"Content-Type": "application/json", "Authorization": f"Bearer {key}"}
-            r = requests.post(url, headers=headers, json=body, timeout=120)
-            # بعض المزوّدين لا يدعمون json_object — أعد بدونه
+            r = requests.post(url, headers=headers, json=body, timeout=(8, 45))
             if r.status_code in (400, 422) and json_mode:
                 body.pop("response_format", None)
-                r = requests.post(url, headers=headers, json=body, timeout=120)
+                r = requests.post(url, headers=headers, json=body, timeout=(8, 45))
             if r.status_code >= 400:
                 last = f"{name}: {r.status_code}"
                 continue
@@ -75,8 +83,14 @@ def chat(messages, json_mode=False, temperature=0.3, max_tokens=1400):
                 return txt, name
             last = f"{name}: empty"
         except Exception as e:
-            last = f"{name}: {e}"
+            last = f"{name}: {type(e).__name__}"
     raise RuntimeError("فشل الذكاء من كل المزوّدين — " + last)
+
+
+def chat_fast(messages, json_mode=False, temperature=0.2, max_tokens=400):
+    """نموذج سريع (لتحسين النية) — كمون منخفض."""
+    return chat(messages, json_mode=json_mode, temperature=temperature,
+                max_tokens=max_tokens, chain=fast_chain())
 
 
 def transcribe(audio_path, language="ar"):

@@ -396,21 +396,50 @@ def editor(profile, premium):
 
     # ── القَصّ الذكي بالوصف ──
     st.divider(); st.subheader("✂️ " + L("smartcut_title"))
-    sc = st.columns([4, 1])
-    instr = sc[0].text_input(L("smartcut_ph"), key="smartcut_in", label_visibility="collapsed",
-                             placeholder=L("smartcut_ph"))
-    if sc[1].button(L("smartcut_btn")) and instr.strip():
-        with st.spinner("✂️ …"):
+    mode_tab = st.radio("طريقة القصّ", ["🤖 بالوصف (ذكي)", "⏱️ بالتوقيت (دقّة 100%)"],
+                        horizontal=True, label_visibility="collapsed")
+    if mode_tab.startswith("⏱️"):
+        st.caption("اكتب النطاقات الزمنية مثل: من 2:30 إلى 4:00 — أو: 1:05-1:40، 5:00-6:10")
+        tcol = st.columns([4, 1])
+        tin = tcol[0].text_input("النطاقات", key="time_in", label_visibility="collapsed",
+                                 placeholder="من 2:30 إلى 4:00")
+        if tcol[1].button("⏱️ اقطع") and tin.strip():
+            ranges = smartcut.parse_time_ranges(tin)
+            if not ranges:
+                st.error("لم أفهم التوقيت. اكتب مثل: من 2:30 إلى 4:00")
+            else:
+                res = smartcut.from_time_ranges(st.session_state.words, ranges)
+                st.session_state["_smart_removed"] = list(res["removed_ids"])
+                st.session_state["_smart_reason"] = res["reason"]
+                st.session_state["_smart_prov"] = "manual"
+                st.session_state["_smart_times"] = res["time_ranges"]
+                st.session_state["_smart_mode"] = "manual"
+                st.session_state["_smart_nseg"] = res["segments_found"]
+                st.rerun()
+    else:
+        sc = st.columns([4, 1])
+        instr = sc[0].text_input(L("smartcut_ph"), key="smartcut_in", label_visibility="collapsed",
+                                 placeholder=L("smartcut_ph"))
+        hi_acc = st.checkbox("🎯 دقّة أعلى (أبطأ قليلًا — يحسّن فهم نيّتك)", value=False, key="hi_acc")
+        if sc[1].button(L("smartcut_btn")) and instr.strip():
+            prog = st.progress(0, text="🧠 أحدّد المقاطع…")
             try:
-                res = smartcut.plan(st.session_state.words, instr.strip())
+                if hi_acc:
+                    prog.progress(30, text="🔍 أحلّل نيّتك بدقّة…")
+                res = smartcut.plan(st.session_state.words, instr.strip(), refine=hi_acc)
+                prog.progress(90, text="✓ أطابق بالتوقيت الدقيق…")
                 st.session_state["_smart_removed"] = list(res["removed_ids"])
                 st.session_state["_smart_reason"] = res.get("reason", "")
                 st.session_state["_smart_prov"] = res.get("provider", "")
                 st.session_state["_smart_times"] = res.get("time_ranges", [])
                 st.session_state["_smart_mode"] = res.get("mode", "cut")
                 st.session_state["_smart_nseg"] = res.get("segments_found", 0)
+                st.session_state["_smart_refined"] = res.get("refined", "")
+                prog.progress(100, text="تم ✓")
             except Exception as ex:
                 st.error(str(ex))
+            finally:
+                prog.empty()
     if st.session_state.get("_smart_removed"):
         rem = set(st.session_state["_smart_removed"])
         preview = " ".join(("❌" + w["text"]) if w["id"] in rem else w["text"] for w in st.session_state.words)

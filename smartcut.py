@@ -77,15 +77,35 @@ def _fmt_ts(sec):
     return f"{m}:{s:04.1f}"
 
 
-def plan(words, instruction, gap_merge=0.6):
+REFINE_SYS = """You are an intent-refiner for a video-editing tool. The user writes a casual Arabic instruction about what to cut/extract from a lecture transcript. Rewrite it into a SINGLE precise, unambiguous English directive for a downstream extraction model. Resolve vague wording, detect whether they mean CUT or EXTRACT/KEEP, and whether they want ALL occurrences or a specific one. Do NOT add anything the user didn't intend. Output ONLY the refined directive, one line, no quotes."""
+
+
+def refine_intent(instruction):
+    """الطبقة ١: نموذج سريع يحسّن نية المستخدم لتوجيه دقيق."""
+    try:
+        txt, _ = providers.chat_fast(
+            [{"role": "system", "content": REFINE_SYS},
+             {"role": "user", "content": instruction}],
+            temperature=0.1, max_tokens=200)
+        txt = (txt or "").strip().strip('"').strip()
+        return txt or instruction
+    except Exception:
+        return instruction  # لو فشل، نستخدم الأصلي (لا نتعطّل)
+
+
+def plan(words, instruction, gap_merge=0.6, refine=False):
     if not words:
-        return {"removed_ids": set(), "ranges": [], "time_ranges": [], "reason": "", "provider": ""}
+        return {"removed_ids": set(), "ranges": [], "time_ranges": [], "reason": "", "provider": "",
+                "mode": "cut", "segments_found": 0, "refined": ""}
     id2 = {w["id"]: w for w in words}
+
+    # الطبقة ١: تحسين النية (سريع)
+    refined = refine_intent(instruction) if refine else instruction
 
     chunks, cur, size = [], [], 0
     for w in words:
         tok = f'{w["id"]}:{w["text"]} '
-        if size + len(tok) > 11000 and cur:
+        if size + len(tok) > 6000 and cur:
             chunks.append(cur); cur, size = [], 0
         cur.append(w); size += len(tok)
     if cur:
@@ -96,7 +116,8 @@ def plan(words, instruction, gap_merge=0.6):
     for ch in chunks:
         numbered = " ".join(f'{w["id"]}:{w["text"]}' for w in ch)
         t0, t1 = ch[0]["start"], ch[-1]["end"]
-        user = (f"INSTRUCTION (Arabic): {instruction}\n\n"
+        user = (f"USER INSTRUCTION (Arabic, original): {instruction}\n"
+                f"REFINED DIRECTIVE (English, authoritative): {refined}\n\n"
                 f"This chunk spans {_fmt_ts(t0)} to {_fmt_ts(t1)}.\n"
                 f"TRANSCRIPT (id:word):\n{numbered}\n\nReturn the JSON now.")
         txt, provider = providers.chat(
@@ -147,5 +168,52 @@ def plan(words, instruction, gap_merge=0.6):
                                 "label": f"{_fmt_ts(st_)} -> {_fmt_ts(en_)}"})
 
     return {"removed_ids": removed, "ranges": merged_ids, "time_ranges": time_ranges,
-            "mode": mode, "segments_found": seg_found,
+            "mode": mode, "segments_found": seg_found, "refined": refined,
             "reason": " · ".join(reasons)[:300], "provider": provider}
+
+
+def _parse_time(tok):
+    """يحوّل '2:30' أو '90' أو '1:05.5' إلى ثوانٍ."""
+    tok = tok.strip().replace("،", ":").replace("٫", ".")
+    if ":" in tok:
+        parts = tok.split(":")
+        try:
+            parts = [float(p) for p in parts]
+        except ValueError:
+            return None
+        sec = 0.0
+        for p in parts:
+            sec = sec * 60 + p
+        return sec
+    try:
+        return float(tok)
+    except ValueError:
+        return None
+
+
+def parse_time_ranges(text):
+    """يستخرج نطاقات زمنية من نص حرّ مثل 'من 2:30 إلى 4:00, و 5:00-6:10'."""
+    import re
+    out = []
+    # ابحث عن أزواج رقمية مفصولة بـ إلى / - / to / حتى
+    pat = re.compile(r'(\d{1,3}(?::\d{1,2}(?:\.\d+)?)?)\s*(?:إلى|الى|-|–|—|to|حتى|→)\s*(\d{1,3}(?::\d{1,2}(?:\.\d+)?)?)')
+    for m in pat.finditer(text):
+        a, b = _parse_time(m.group(1)), _parse_time(m.group(2))
+        if a is not None and b is not None and b > a:
+            out.append((a, b))
+    return out
+
+
+def from_time_ranges(words, ranges):
+    """قصّ يدوي دقيق: يحذف كل كلمة يقع توقيتها داخل النطاقات المعطاة (بالثواني)."""
+    removed = set()
+    for w in words:
+        for s, e in ranges:
+            if w["end"] > s and w["start"] < e:  # تداخل
+                removed.add(w["id"])
+                break
+    time_ranges = [{"start": round(s, 2), "end": round(e, 2),
+                    "label": f"{_fmt_ts(s)} -> {_fmt_ts(e)}"} for s, e in sorted(ranges)]
+    return {"removed_ids": removed, "ranges": [], "time_ranges": time_ranges,
+            "mode": "manual", "segments_found": len(ranges),
+            "reason": "قصّ يدوي بالتوقيت الدقيق", "provider": "manual"}
