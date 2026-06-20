@@ -10,7 +10,7 @@ import os
 import streamlit as st
 import streamlit.components.v1 as components
 
-MAX_MB = 60  # حد حجم الفيديو للتضمين المباشر
+MAX_MB = 15  # حد صغير يمنع تجميد المتصفح
 
 
 def render(video_path, words, height=440):

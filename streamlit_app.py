@@ -154,6 +154,21 @@ def transcribe_via_space(audio_path, language):
     return words
 
 
+def kept_segments_from_words(words, gap=0.8):
+    """يبني المقاطع المُبقاة من الكلمات المتبقّية؛ الفجوة الزمنية الكبيرة = مكان قُصّ."""
+    if not words:
+        return []
+    ws = sorted(words, key=lambda w: w["start"])
+    segs, cs, ce = [], ws[0]["start"], ws[0]["end"]
+    for w in ws[1:]:
+        if w["start"] - ce > gap:
+            segs.append((round(cs, 3), round(ce, 3)))
+            cs = w["start"]
+        ce = max(ce, w["end"])
+    segs.append((round(cs, 3), round(ce, 3)))
+    return segs
+
+
 def kept_segments(df):
     segs, cur = [], None
     for _, r in df.iterrows():
@@ -309,6 +324,7 @@ def editor(profile, premium):
             words = transcribe_via_space(audio, language)
         st.session_state.update(words=words, vpath=vpath, language=language,
                                 duration=editing.get_duration(vpath), limited=not premium)
+        st.session_state.video_bytes = open(vpath, "rb").read()
         st.rerun()
 
     if up and st.button(L("start")):
@@ -325,6 +341,7 @@ def editor(profile, premium):
                 st.error(str(ex)); return
         st.session_state.update(words=words, vpath=vpath, language=language,
                                 duration=editing.get_duration(vpath), limited=limited)
+        st.session_state.video_bytes = open(vpath, "rb").read()
         try:
             proj = supa.create_project(st.session_state.user["id"], up.name, language,
                                        st.session_state.duration, limited, words)
@@ -340,11 +357,14 @@ def editor(profile, premium):
 
     c1, c2 = st.columns(2)
     with c1:
-        # مشغّل متزامن: النص يتحرّك مع الفيديو + الضغط يقفز للحظة
-        ok = karaoke.render(st.session_state.vpath, st.session_state.words, height=460)
+        sync_on = st.checkbox("🎬 النص المتزامن (للفيديوهات الصغيرة فقط)", value=False, key="sync_on")
+        ok = False
+        if sync_on:
+            ok = karaoke.render(st.session_state.vpath, st.session_state.words, height=460)
+            if not ok:
+                st.caption("ℹ️ الفيديو كبير على المشغّل المتزامن — يُعرض عاديًا.")
         if not ok:
-            st.video(st.session_state.vpath)
-            st.caption("ℹ️ الفيديو كبير على المشغّل المتزامن — يُعرض عاديًا. النص المتزامن يعمل مع الفيديوهات حتى ٦٠م.ب.")
+            st.video(st.session_state.get("video_bytes") or st.session_state.vpath)
         if providers.llm_chain() and st.button(L("proofread")):
             with st.spinner("…"):
                 try:
@@ -358,7 +378,6 @@ def editor(profile, premium):
             st.rerun()
     with c2:
         st.subheader(L("edit_title"))
-        # عرض النص الكامل القابل للقراءة + وضع تحرير نصّي
         full_text = " ".join(w["text"] for w in st.session_state.words)
         tab_tbl, tab_txt = st.tabs(["📝 " + L("edit_title"), "📄 النص الكامل"])
         with tab_txt:
@@ -368,7 +387,6 @@ def editor(profile, premium):
             if st.button("💾 احفظ تعديل النص"):
                 toks = new_txt.split()
                 old = st.session_state.words
-                # أعِد توزيع التوقيت على الكلمات الجديدة بالتناسب
                 if toks:
                     t0 = old[0]["start"] if old else 0.0
                     t1 = old[-1]["end"] if old else len(toks) * 0.4
@@ -381,15 +399,19 @@ def editor(profile, premium):
                         supa.update_transcript(st.session_state.project_id, st.session_state.words)
                     st.rerun()
         with tab_tbl:
-            df = pd.DataFrame([{L("col_remove"): False, L("col_text"): w["text"],
-                                "start": w["start"], "end": w["end"]} for w in st.session_state.words])
-            edited = st.data_editor(df, use_container_width=True, height=300, hide_index=True,
-                                    column_config={"start": st.column_config.NumberColumn(format="%.2f", disabled=True),
-                                                   "end": st.column_config.NumberColumn(format="%.2f", disabled=True)})
-            st.session_state.words = [{"id": i, "text": r[L("col_text")], "start": r["start"], "end": r["end"]}
-                                      for i, r in edited.iterrows()]
+            st.caption("النص للقراءة. للحذف استخدم: القصّ الذكي بالوصف، أو القصّ بالتوقيت، أو حرّر النص الكامل.")
+            # عرض خفيف للكلمات المحذوفة حاليًا (إن وُجدت)
+            rem_now = set(st.session_state.get("_applied_removed", []))
+            chips = " ".join(
+                (f"<span style='background:#fee2e2;color:#991b1b;padding:1px 5px;border-radius:5px;text-decoration:line-through'>{w['text']}</span>"
+                 if w["id"] in rem_now else w["text"]) for w in st.session_state.words[:600])
+            st.markdown(f"<div style='max-height:300px;overflow:auto;background:#fff;border:1px solid #e8edf3;"
+                        f"border-radius:10px;padding:12px;line-height:2.1;font-size:1.05rem'>{chips}</div>",
+                        unsafe_allow_html=True)
 
-    segs = kept_segments(edited); kept = sum(e - s for s, e in segs)
+    # المقاطع المُبقاة تُحسب من الكلمات المتبقّية (الفجوات = أماكن القصّ)
+    segs = kept_segments_from_words(st.session_state.words)
+    kept = sum(e - s for s, e in segs)
     m = st.columns(3)
     m[0].metric(L("m_orig"), fmt(st.session_state.duration))
     m[1].metric(L("m_after"), fmt(kept)); m[2].metric(L("m_cuts"), len(segs))
@@ -413,6 +435,7 @@ def editor(profile, premium):
                 st.session_state["_smart_reason"] = res["reason"]
                 st.session_state["_smart_prov"] = "manual"
                 st.session_state["_smart_times"] = res["time_ranges"]
+                st.session_state["_smart_ranges"] = res.get("ranges", [])
                 st.session_state["_smart_mode"] = "manual"
                 st.session_state["_smart_nseg"] = res["segments_found"]
                 st.rerun()
@@ -432,6 +455,7 @@ def editor(profile, premium):
                 st.session_state["_smart_reason"] = res.get("reason", "")
                 st.session_state["_smart_prov"] = res.get("provider", "")
                 st.session_state["_smart_times"] = res.get("time_ranges", [])
+                st.session_state["_smart_ranges"] = res.get("ranges", [])
                 st.session_state["_smart_mode"] = res.get("mode", "cut")
                 st.session_state["_smart_nseg"] = res.get("segments_found", 0)
                 st.session_state["_smart_refined"] = res.get("refined", "")
@@ -442,7 +466,12 @@ def editor(profile, premium):
                 prog.empty()
     if st.session_state.get("_smart_removed"):
         rem = set(st.session_state["_smart_removed"])
-        preview = " ".join(("❌" + w["text"]) if w["id"] in rem else w["text"] for w in st.session_state.words)
+        # معاينة خفيفة: نعرض المقاطع المحذوفة فقط (لا كامل النص) لتفادي ثقل الرسم
+        wb = {w["id"]: w["text"] for w in st.session_state.words}
+        preview = "، ".join("…".join(wb[i] for i in range(s, e + 1) if i in wb)
+                            for s, e in (st.session_state.get("_smart_ranges") or []))
+        if not preview:
+            preview = " ".join(wb[i] for i in sorted(rem) if i in wb)[:1000]
         st.caption(L("smartcut_preview").format(n=len(rem), prov=st.session_state.get("_smart_prov", "")))
         if st.session_state.get("_smart_reason"):
             st.caption("💡 " + st.session_state["_smart_reason"])
