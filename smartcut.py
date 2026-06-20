@@ -77,7 +77,12 @@ def _fmt_ts(sec):
     return f"{m}:{s:04.1f}"
 
 
-REFINE_SYS = """You are an intent-refiner for a video-editing tool. The user writes a casual Arabic instruction about what to cut/extract from a lecture transcript. Rewrite it into a SINGLE precise, unambiguous English directive for a downstream extraction model. Resolve vague wording, detect whether they mean CUT or EXTRACT/KEEP, and whether they want ALL occurrences or a specific one. Do NOT add anything the user didn't intend. Output ONLY the refined directive, one line, no quotes."""
+REFINE_SYS = """You convert a casual Arabic editing instruction into a precise directive for a transcript-cutting model.
+Output ONE line in English that states EXACTLY:
+1. MODE: CUT (remove named parts) or EXTRACT (keep only named parts, remove rest).
+2. TARGET: what content to act on, described concretely (e.g. "opening greeting and self-introduction", "every passage about patience", "audio from 2:30 to 4:00").
+3. SCOPE: ALL occurrences, FIRST only, LAST only, or a specific one.
+Be faithful to the user's intent; do not add or drop requirements. No quotes, no explanation, just the directive line."""
 
 
 def refine_intent(instruction):
@@ -105,7 +110,7 @@ def plan(words, instruction, gap_merge=0.6, refine=False):
     chunks, cur, size = [], [], 0
     for w in words:
         tok = f'{w["id"]}:{w["text"]} '
-        if size + len(tok) > 6000 and cur:
+        if size + len(tok) > 14000 and cur:
             chunks.append(cur); cur, size = [], 0
         cur.append(w); size += len(tok)
     if cur:

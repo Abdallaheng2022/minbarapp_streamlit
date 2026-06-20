@@ -100,6 +100,7 @@ def apply_direction():
     .badge-admin {{ background:#ede9fe; color:#5b21b6; }}
     .badge-free {{ background:#f1f5f9; color:#475569; }}
     [data-testid="stMetricValue"] {{ color:#0d9488; font-weight:800; }}
+    .stVideo video, video {{ max-width:380px !important; border-radius:14px; }}
     .stApp [data-testid="stMetric"] {{ background:#fff; border:1px solid #e8edf3; border-radius:14px; padding:.8rem 1rem; }}
     </style>""", unsafe_allow_html=True)
 
@@ -355,9 +356,11 @@ def editor(profile, premium):
     if st.session_state.get("limited"):
         st.warning(L("limited_warn").format(m=FREE_SECONDS // 60))
 
-    c1, c2 = st.columns(2)
+    c1, c2 = st.columns([5, 7])
     with c1:
-        sync_on = st.checkbox("🎬 النص المتزامن (للفيديوهات الصغيرة فقط)", value=False, key="sync_on")
+        sync_on = st.checkbox("🎬 النص المتزامن (يتحرّك مع الفيديو + الضغط يقفز للحظة)",
+                              value=False, key="sync_on",
+                              help="يعمل مع الفيديوهات الصغيرة (≤15م.ب). قد يبطّئ المتصفح للفيديوهات الكبيرة.")
         ok = False
         if sync_on:
             ok = karaoke.render(st.session_state.vpath, st.session_state.words, height=460)
@@ -443,14 +446,14 @@ def editor(profile, premium):
         sc = st.columns([4, 1])
         instr = sc[0].text_input(L("smartcut_ph"), key="smartcut_in", label_visibility="collapsed",
                                  placeholder=L("smartcut_ph"))
-        hi_acc = st.checkbox("🎯 دقّة أعلى (أبطأ قليلًا — يحسّن فهم نيّتك)", value=False, key="hi_acc")
         if sc[1].button(L("smartcut_btn")) and instr.strip():
-            prog = st.progress(0, text="🧠 أحدّد المقاطع…")
+            prog = st.progress(0, text="🔍 أفهم نيّتك بدقّة…")
             try:
-                if hi_acc:
-                    prog.progress(30, text="🔍 أحلّل نيّتك بدقّة…")
-                res = smartcut.plan(st.session_state.words, instr.strip(), refine=hi_acc)
-                prog.progress(90, text="✓ أطابق بالتوقيت الدقيق…")
+                prog.progress(40, text="🧠 أحلّل النص الكامل وأحدّد المقاطع…")
+                # دائمًا refine=True: نمرّر التفريغ الكامل + البرومت + النية المحسّنة
+                # (الطلبات على الخادم، فلا تجمّد المتصفح)
+                res = smartcut.plan(st.session_state.words, instr.strip(), refine=True)
+                prog.progress(90, text="✓ أطابق المقاطع بالتوقيت الدقيق…")
                 st.session_state["_smart_removed"] = list(res["removed_ids"])
                 st.session_state["_smart_reason"] = res.get("reason", "")
                 st.session_state["_smart_prov"] = res.get("provider", "")
